@@ -3,6 +3,7 @@ const forge = require('node-forge');
 const fs = require('fs');
 const cp = require('child_process');
 const fetch = require('node-fetch');
+const inquirer = require('inquirer');
 
 function asciiToHexString(str) {
   return str
@@ -36,13 +37,33 @@ function sign(datas, key) {
 }
 
 const filename = process.argv[2];
-const pkeyFile = process.argv[3] ? process.argv[3] : `${process.env['HOME']}/.ssh/id_rsa`;
+function work(cert) {
+  const pkeyFile = process.argv[3] ? process.argv[3] : `${process.env['HOME']}/.ssh/${cert}`;
 
-const pkey = fs.readFileSync(pkeyFile, 'utf8');
-const privateKey = forge.pki.privateKeyFromPem(pkey);
-// const privateKey = forge.pki.decryptRsaPrivateKey(pem, 'password');
+  const pkey = fs.readFileSync(pkeyFile, 'utf8');
+  const privateKey = forge.pki.privateKeyFromPem(pkey);
+  // const privateKey = forge.pki.decryptRsaPrivateKey(pem, 'password');
 
-const sha = cp.execFileSync('git', ['hash-object', filename]).toString().trim();
+  const sha = cp.execFileSync('git', ['hash-object', filename]).toString().trim();
 
-console.log(sign(sha, privateKey));
+  console.log(sign(sha, privateKey));
+}
+
+if (process.argv[3]) work();
+else {
+  const certs = fs.readdirSync(`${process.env['HOME']}/.ssh/`)
+    .filter(f => f.includes('.pub'))
+    .map(f => f.replace('.pub', ''));
+
+  if (certs.length > 1)
+    inquirer.prompt({
+      type: 'list',
+      name: 'cert',
+      message: 'Which certificate do you wish to use ?',
+      choices: certs,
+    }).then(answer => {
+      return work(answer.cert);
+    });
+  else work(certs[0]);
+}
 
